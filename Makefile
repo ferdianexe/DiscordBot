@@ -14,6 +14,7 @@ deps:
 
 # Run the application
 run:
+	go build -o app
 	./app
 
 # Clean compiled binaries

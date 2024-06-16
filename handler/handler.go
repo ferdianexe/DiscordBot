@@ -29,7 +29,7 @@ type usecaseProvider interface {
 	GetLoanList() ([]entity.Loan, error)
 
 	// GetNextPayment returns the next payment date and the payment amount.
-	GetNextPayment(loanID int) (string, error)
+	GetNextPayment(loanID int) (usecase.GetNextPaymentResponse, error)
 
 	// GetUser retrieves a user information based on the given id.
 	GetUser(id int) (entity.User, error)
@@ -38,7 +38,7 @@ type usecaseProvider interface {
 	GetUserList() ([]entity.User, error)
 
 	// UpdateLoan updates a loan information (ex: payment).
-	MakePayment(param usecase.MakePaymentParam) error
+	MakePayment(param usecase.MakePaymentParam) (usecase.MakePaymentResponse, error)
 
 	// UpdateUser updates a user information based on the given id.
 	UpdateUser(param entity.User) error

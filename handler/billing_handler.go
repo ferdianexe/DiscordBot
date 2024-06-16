@@ -3,7 +3,6 @@ package handler
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -60,7 +59,8 @@ func (h *Handler) GetLoanList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeResponse(w, http.StatusOK, loans)
+	response.Data = loans
+	writeResponse(w, http.StatusOK, response)
 }
 
 // GetNextPayment returns the next payment date and the payment amount.
@@ -87,7 +87,7 @@ func (h *Handler) GetNextPayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response.Message = result
+	response.Data = result
 	writeResponse(w, http.StatusOK, response)
 }
 
@@ -115,7 +115,10 @@ func (h *Handler) GetOutstanding(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response.Message = fmt.Sprintf("outstanding amount of loan ID %d is %0.2f", loanID, loan.Outstanding)
+	response.Data = GetOutstandingResponse{
+		LoanID:      loanID,
+		Outstanding: loan.Outstanding,
+	}
 	writeResponse(w, http.StatusOK, response)
 }
 
@@ -143,9 +146,9 @@ func (h *Handler) GetUserDelinquentStatus(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	response.Message = "user is not delinquent"
-	if user.IsDelinquent {
-		response.Message = "user is delinquent"
+	response.Data = GetUserDelinquentStatusResponse{
+		UserID:       user.ID,
+		IsDelinquent: user.IsDelinquent,
 	}
 	writeResponse(w, http.StatusOK, response)
 }
@@ -167,7 +170,8 @@ func (h *Handler) GetUserList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeResponse(w, http.StatusOK, users)
+	response.Data = users
+	writeResponse(w, http.StatusOK, response)
 }
 
 // MakeLoan makes a loan.
@@ -239,7 +243,7 @@ func (h *Handler) MakePayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = h.usecase.MakePayment(usecase.MakePaymentParam{
+	result, err := h.usecase.MakePayment(usecase.MakePaymentParam{
 		LoanID:      payment.LoanID,
 		UserID:      payment.UserID,
 		Amount:      payment.Amount,
@@ -251,7 +255,7 @@ func (h *Handler) MakePayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response.Message = "success to make a payment"
+	response.Data = result
 	writeResponse(w, http.StatusOK, response)
 }
 

@@ -12,18 +12,6 @@ const (
 	interestRate = 0.1
 )
 
-// MakePaymentParam is the parameter for making a payment.
-type MakePaymentParam struct {
-	LoanID int
-	UserID int
-	Amount float32
-
-	// To override payment date.
-	// If not set, the payment date will be the current time.
-	// Format: 2006-01-02
-	PaymentDate string
-}
-
 // CreateDatabase creates a new database in case it doesn't exist.
 func (uc *UseCase) CreateDatabase() error {
 	return uc.repo.SetupDatabase()
@@ -66,15 +54,15 @@ func (uc *UseCase) GetLoanList() ([]entity.Loan, error) {
 }
 
 // GetNextPayment returns the next payment date and the payment amount.
-func (uc *UseCase) GetNextPayment(loanID int) (string, error) {
+func (uc *UseCase) GetNextPayment(loanID int) (GetNextPaymentResponse, error) {
 	loan, err := uc.repo.GetLoan(loanID)
 	if err != nil {
-		return "", err
+		return GetNextPaymentResponse{}, err
 	}
 
 	currentTime := time.Now()
 
-	var latePayment bool
+	var response GetNextPaymentResponse
 
 	// truncate the time so we only compare the day.
 	// nextPaymentDate example: loan that was created on 2020-01-01 will have a next payment due on 2020-01-08.
@@ -82,19 +70,23 @@ func (uc *UseCase) GetNextPayment(loanID int) (string, error) {
 
 	if currentTime.Truncate(24*time.Hour).Sub(nextPaymentDate).Hours()/24 > 14 {
 		_ = uc.repo.UpdateUser(entity.User{ID: loan.UserID, IsDelinquent: true})
-		latePayment = true
+		response.IsLatePayment = true
 	}
 
-	if latePayment {
+	amount := loan.BillAmount
+
+	if response.IsLatePayment {
 		multiplier := int(currentTime.Truncate(24*time.Hour).Sub(nextPaymentDate).Hours()/24) / 7
-		amount := loan.BillAmount * float32(multiplier)
+		amount = loan.BillAmount * float32(multiplier)
 		if amount > loan.Outstanding {
 			amount = loan.Outstanding * (1 + interestRate)
 		}
-		return fmt.Sprintf("You are %d weeks late. Please pay %.2f", multiplier, amount), nil
 	}
 
-	return fmt.Sprintf("Your next payment of %.2f is due on %s", loan.BillAmount, nextPaymentDate.Format("2006-01-02")), nil
+	response.PaymentAmount = amount
+	response.NextPaymentDate = nextPaymentDate.Format("2006-01-02")
+
+	return response, nil
 }
 
 // GetUser retrieves a user information based on the given id.
@@ -117,25 +109,32 @@ func (uc *UseCase) GetUserList() ([]entity.User, error) {
 }
 
 // UpdateLoan updates a loan information (ex: payment).
-func (uc *UseCase) MakePayment(param MakePaymentParam) error {
-	var isDelinquent bool
+func (uc *UseCase) MakePayment(param MakePaymentParam) (MakePaymentResponse, error) {
+	var (
+		isDelinquent bool
+		response     MakePaymentResponse
+	)
 
 	user, err := uc.repo.GetUser(param.UserID)
 	if err != nil {
-		return err
+		return response, err
 	}
 
 	loan, err := uc.repo.GetLoan(param.LoanID)
 	if err != nil {
-		return err
+		return response, err
 	}
 
+	response.LoanID = loan.ID
+
 	if user.ID != loan.UserID {
-		return errors.New("user id does not match")
+		response.Message = "user id does not match"
+		return response, nil
 	}
 
 	if loan.Outstanding == 0 {
-		return errors.New("loan has been paid")
+		response.Message = "loan has been paid"
+		return response, nil
 	}
 
 	currentTime := time.Now()
@@ -150,7 +149,7 @@ func (uc *UseCase) MakePayment(param MakePaymentParam) error {
 		isDelinquent = true
 		err = uc.repo.UpdateUser(entity.User{ID: loan.UserID, IsDelinquent: isDelinquent})
 		if err != nil {
-			return err
+			return response, err
 		}
 
 		multiplier := int(currentTime.Truncate(24*time.Hour).Sub(loan.UpdateTime.Truncate(24*time.Hour)).Hours() / 24 / 7)
@@ -161,7 +160,8 @@ func (uc *UseCase) MakePayment(param MakePaymentParam) error {
 	}
 
 	if billAmount != param.Amount {
-		return fmt.Errorf("amount is not equal to the bill amount. Expected: %0.2f, Actual: %0.2f", billAmount, param.Amount)
+		response.Message = fmt.Sprintf("amount is not equal to the bill amount. Expected: %0.2f, Actual: %0.2f", billAmount, param.Amount)
+		return response, nil
 	}
 
 	loan.Outstanding -= param.Amount / (1 + interestRate)
@@ -169,24 +169,28 @@ func (uc *UseCase) MakePayment(param MakePaymentParam) error {
 
 	err = uc.repo.UpdateLoan(loan)
 	if err != nil {
-		return err
+		return response, err
 	}
 
 	if isDelinquent && loan.Outstanding == 0 {
 		remainingLoans, err := uc.GetActiveLoanByUserID(param.UserID)
 		if err != nil {
-			return err
+			response.Message = "failed to get remaining loans for delinquent validation - contact administrator"
+			return response, nil
 		}
 
 		if len(remainingLoans) == 0 {
 			err = uc.repo.UpdateUser(entity.User{ID: param.UserID, IsDelinquent: false})
 			if err != nil {
-				return err
+				response.Message = "failed to remove delinquent status - contact administrator"
+				return response, nil
 			}
 		}
 	}
 
-	return nil
+	response.IsSuccess = true
+	response.Message = "success to make a payment"
+	return response, nil
 }
 
 // UpdateUser updates a user information based on the given id.

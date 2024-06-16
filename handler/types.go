@@ -2,7 +2,20 @@ package handler
 
 // GeneralResponse is the general response entity.
 type GeneralResponse struct {
-	Message string `json:"message"`
+	Message string      `json:"message,omitempty"`
+	Data    interface{} `json:"data,omitempty"`
+}
+
+// GetOutstandingResponse is the response entity for getting the outstanding amount of a loan.
+type GetOutstandingResponse struct {
+	LoanID      int     `json:"loan_id"`
+	Outstanding float32 `json:"outstanding"`
+}
+
+// GetUserDelinquentStatusResponse is the response entity for getting the delinquent status of a user.
+type GetUserDelinquentStatusResponse struct {
+	UserID       int  `json:"user_id"`
+	IsDelinquent bool `json:"is_delinquent"`
 }
 
 // LoanRequest is the loan request entity.

@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"net/http"
 
@@ -44,6 +45,12 @@ func main() {
 	h := handler.NewHandler(uc)
 
 	app := NewApplication(h)
+
+	err = dbRepo.SetupDatabase()
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("Connected to database")
 
 	app.routes()
 
