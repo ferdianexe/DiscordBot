@@ -1,16 +1,14 @@
 package main
 
 import (
-	"database/sql"
+	"ferdianexe/DiscordBot/handler"
+	"ferdianexe/DiscordBot/infra/config"
+	"ferdianexe/DiscordBot/usecase"
 	"fmt"
 	"log"
 	"net/http"
 
-	_ "github.com/mattn/go-sqlite3"
-
-	"github.com/jery1402/billing-engine/handler"
-	"github.com/jery1402/billing-engine/repository/sqlite"
-	"github.com/jery1402/billing-engine/usecase"
+	"github.com/bwmarrin/discordgo"
 )
 
 type Application struct {
@@ -22,45 +20,58 @@ func NewApplication(handler *handler.Handler) *Application {
 }
 
 func (app *Application) routes() {
-	http.HandleFunc("/init_db", app.handler.CreateDatabase)
-	http.HandleFunc("/create_user", app.handler.CreateUser)
-	http.HandleFunc("/get_payment_schedule", app.handler.GetNextPayment)
-	http.HandleFunc("/get_outstanding", app.handler.GetOutstanding)
-	http.HandleFunc("/loan_list", app.handler.GetLoanList)
-	http.HandleFunc("/user_list", app.handler.GetUserList)
-	http.HandleFunc("/is_delinquent", app.handler.GetUserDelinquentStatus)
-	http.HandleFunc("/make_loan", app.handler.MakeLoan)
-	http.HandleFunc("/make_payment", app.handler.MakePayment)
+	http.HandleFunc("/ping", app.handler.Ping)
+}
+
+func checkNilErr(e error) {
+	if e != nil {
+		log.Fatal("Error message")
+	}
 }
 
 func main() {
-	db, err := initDB()
-	if err != nil {
-		log.Fatal(err)
-	}
+	// db, err := initDB()
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
 
-	dbRepo := sqlite.NewRepository(db)
+	// dbRepo := sqlite.NewRepository(db)
 
-	uc := usecase.NewUseCase(dbRepo)
+	fileReader := config.NewConfigFileReader("")
+	configProvider := config.NewService(fileReader)
+
+	// err := dbRepo.SetupDatabase()
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+	// fmt.Println("Connected to database")
+
+	// create a session
+	discord, err := discordgo.New("Bot " + configProvider.GetConfig().BotID)
+	checkNilErr(err)
+
+	uc := usecase.NewUseCase(discord)
 	h := handler.NewHandler(uc)
-
 	app := NewApplication(h)
-
-	err = dbRepo.SetupDatabase()
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Println("Connected to database")
-
 	app.routes()
+
+	// add a event handler
+	discord.AddHandler(h.IncomingMessageWrapper)
+
+	// open session
+	discord.Open()
+	defer discord.Close() // close session, after function termination
+
+	// keep bot running untill there is NO os interruption (ctrl + C)
+	fmt.Println("Bot running....")
 
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
-func initDB() (*sql.DB, error) {
-	db, err := sql.Open("sqlite3", "./billing-engine.db")
-	if err != nil {
-		return nil, err
-	}
-	return db, nil
-}
+// func initDB() (*sql.DB, error) {
+// 	db, err := sql.Open("sqlite3", "./db.db")
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	return db, nil
+// }

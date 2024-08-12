@@ -1,46 +1,53 @@
 package usecase
 
-import "github.com/jery1402/billing-engine/entity"
+import (
+	"log"
+
+	"github.com/bwmarrin/discordgo"
+)
 
 // repoProvider is the interface for the repository.
 type repoProvider interface {
-	// InsertLoan inserts a new loan in the database.
-	InsertLoan(param entity.Loan) error
+	ChannelMessageSend(channelID string, content string, options ...discordgo.RequestOption) (*discordgo.Message, error)
+	// ------------------------------------------------------------------------------------------------
+	// Functions specific to Discord Guilds
+	// ------------------------------------------------------------------------------------------------
 
-	// InsertUser inserts a new user in the database.
-	InsertUser(param entity.User) error
+	// Guild returns a Guild structure of a specific Guild.
+	// guildID   : The ID of a Guild
+	Guild(guildID string, options ...discordgo.RequestOption) (st *discordgo.Guild, err error)
 
-	// GetActiveLoanByUserID retrieves a list of active loan information from the database based on the given user id.
-	GetActiveLoanByUserID(userID int) ([]entity.Loan, error)
-
-	// GetLoan retrieves a loan information based on the given id.
-	GetLoan(id int) (entity.Loan, error)
-
-	// GetLoanList retrieves a list of loan information from the database.
-	GetLoanList() ([]entity.Loan, error)
-
-	// GetUser retrieves a user information based on the given id.
-	GetUser(id int) (entity.User, error)
-
-	// GetUserList retrieves a list of user information from the database.
-	GetUserList() ([]entity.User, error)
-
-	// UpdateLoan updates a loan information (ex: payment).
-	UpdateLoan(param entity.Loan) error
-
-	// UpdateUser updates a user information based on the given id.
-	UpdateUser(param entity.User) error
-
-	// SetupDatabase creates a new database in case it doesn't exist.
-	SetupDatabase() error
+	// ChannelVoiceJoin joins the session user to a voice channel.
+	//
+	//    gID     : Guild ID of the channel to join.
+	//    cID     : Channel ID of the channel to join.
+	//    mute    : If true, you will be set to muted upon joining.
+	//    deaf    : If true, you will be set to deafened upon joining.
+	ChannelVoiceJoin(gID, cID string, mute, deaf bool) (voice *discordgo.VoiceConnection, err error)
 }
 
 // UseCase is the usecase entity
-type UseCase struct {
+type Usecase struct {
 	repo repoProvider
 }
 
 // NewUseCase creates a new use case.
-func NewUseCase(repo repoProvider) *UseCase {
-	return &UseCase{repo: repo}
+func NewUseCase(dc repoProvider) *Usecase {
+	return &Usecase{
+		repo: dc,
+	}
+}
+
+func (usecase *Usecase) PlayMusic(message *discordgo.MessageCreate, voice *discordgo.VoiceState) error {
+	if voice == nil {
+		usecase.repo.ChannelMessageSend(message.ChannelID, "You need to join the voice channel first !")
+		return nil
+	}
+	usecase.repo.ChannelMessageSend(message.ChannelID, "Music!!!")
+	_, err := usecase.repo.ChannelVoiceJoin(message.GuildID, voice.ChannelID, false, false)
+	if err != nil {
+		log.Printf("usecase.repo.ChannelVoiceJoin return error (%v) - PlayMusic", err)
+		return err
+	}
+	return nil
 }

@@ -3,36 +3,17 @@ package sqlite
 import "database/sql"
 
 const (
-	createLoanTableQuery = `
-		CREATE TABLE IF NOT EXISTS loan (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			user_id INTEGER NOT NULL,
-			amount FLOAT NOT NULL,
-			term INTEGER NOT NULL,
-			bill_amount FLOAT NOT NULL,
-			outstanding FLOAT NOT NULL,
-			create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-		);
-	`
-
 	createUserTableQuery = `
 			CREATE TABLE IF NOT EXISTS user (
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
-				name TEXT NOT NULL,
-				is_delinquent BOOLEAN NOT NULL
+				name TEXT NOT NULL
 			);
 	`
 )
 
 // SetupDatabase creates the database tables if they don't exist.
 func (repo *Repository) SetupDatabase() error {
-	_, err := repo.db.Exec(createLoanTableQuery)
-	if err != nil {
-		return err
-	}
-
-	_, err = repo.db.Exec(createUserTableQuery)
+	_, err := repo.db.Exec(createUserTableQuery)
 	if err != nil {
 		return err
 	}
