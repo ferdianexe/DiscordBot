@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"log"
+	"sync"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -26,15 +27,27 @@ type repoProvider interface {
 	ChannelVoiceJoin(gID, cID string, mute, deaf bool) (voice *discordgo.VoiceConnection, err error)
 }
 
+// musicServiceProvider is the interface for the repository.
+type musicServiceProvider interface {
+	PlayMusicLocally(voice *discordgo.VoiceConnection) error
+}
+
 // UseCase is the usecase entity
 type Usecase struct {
-	repo repoProvider
+	repo    repoProvider
+	music   musicServiceProvider
+	lock    sync.Mutex
+	sendpcm bool
+	playing bool
+	send    chan []int16
 }
 
 // NewUseCase creates a new use case.
-func NewUseCase(dc repoProvider) *Usecase {
+func NewUseCase(dc repoProvider, music musicServiceProvider) *Usecase {
 	return &Usecase{
-		repo: dc,
+		repo:  dc,
+		lock:  sync.Mutex{},
+		music: music,
 	}
 }
 
@@ -44,10 +57,15 @@ func (usecase *Usecase) PlayMusic(message *discordgo.MessageCreate, voice *disco
 		return nil
 	}
 	usecase.repo.ChannelMessageSend(message.ChannelID, "Music!!!")
-	_, err := usecase.repo.ChannelVoiceJoin(message.GuildID, voice.ChannelID, false, false)
+	voiceConnection, err := usecase.repo.ChannelVoiceJoin(message.GuildID, voice.ChannelID, false, false)
 	if err != nil {
 		log.Printf("usecase.repo.ChannelVoiceJoin return error (%v) - PlayMusic", err)
 		return err
 	}
+
+	voiceConnection.Speaking(true)
+	defer voiceConnection.Speaking(false)
+
+	usecase.music.PlayMusicLocally(voiceConnection)
 	return nil
 }

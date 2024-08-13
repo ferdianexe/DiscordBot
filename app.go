@@ -3,6 +3,7 @@ package main
 import (
 	"ferdianexe/DiscordBot/handler"
 	"ferdianexe/DiscordBot/infra/config"
+	"ferdianexe/DiscordBot/service/music"
 	"ferdianexe/DiscordBot/usecase"
 	"fmt"
 	"log"
@@ -49,8 +50,8 @@ func main() {
 	// create a session
 	discord, err := discordgo.New("Bot " + configProvider.GetConfig().BotID)
 	checkNilErr(err)
-
-	uc := usecase.NewUseCase(discord)
+	musicSvc := music.NewService()
+	uc := usecase.NewUseCase(discord, musicSvc)
 	h := handler.NewHandler(uc)
 	app := NewApplication(h)
 	app.routes()
