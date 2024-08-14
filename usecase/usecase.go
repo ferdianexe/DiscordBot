@@ -34,12 +34,9 @@ type musicServiceProvider interface {
 
 // UseCase is the usecase entity
 type Usecase struct {
-	repo    repoProvider
-	music   musicServiceProvider
-	lock    sync.Mutex
-	sendpcm bool
-	playing bool
-	send    chan []int16
+	repo  repoProvider
+	music musicServiceProvider
+	lock  sync.Mutex
 }
 
 // NewUseCase creates a new use case.
