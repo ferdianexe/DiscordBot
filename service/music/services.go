@@ -80,3 +80,54 @@ func (service *Service) sendPCM(voice *discordgo.VoiceConnection, pcm <-chan []i
 		voice.OpusSend <- opus
 	}
 }
+
+func (service *Service) PlayMusicYoutube(voice *discordgo.VoiceConnection) error {
+	var err error
+	cmd := exec.Command("yt-dlp", "-f", "bestaudio", "-o", "-", "youtubelink")
+	ffmpegCmd := exec.Command("ffmpeg", "-i", "pipe:0", "-f", "s16le", "-ar", "48000", "-ac", "2", "pipe:1")
+	ffmpegCmd.Stdin, err = cmd.StdoutPipe()
+	if err != nil {
+		fmt.Println("error PlayMusicYoutube: cmd.StdoutPipe(): ", err)
+		return err
+	}
+	ffmpegOut, err := ffmpegCmd.StdoutPipe()
+	if err != nil {
+		fmt.Println("ffmpegCmd.StdoutPipe(): ", err)
+		return err
+	}
+
+	buffer := bufio.NewReaderSize(ffmpegOut, 16384)
+
+	if err := cmd.Start(); err != nil {
+		log.Printf("PlayMusicYoutube Error starting cmd.Start(): %v", err)
+		return err
+	}
+
+	if err := ffmpegCmd.Start(); err != nil {
+		log.Printf("PlayMusicYoutube Error starting ffmpeg: %v", err)
+		return err
+	}
+
+	defer func() {
+		cmd.Wait()
+		ffmpegCmd.Wait()
+	}()
+	fmt.Println("ffmpeg started")
+	send := make(chan []int16, 2)
+
+	go service.sendPCM(voice, send)
+	for {
+		audioBuffer := make([]int16, 960*2)
+		err = binary.Read(buffer, binary.LittleEndian, &audioBuffer)
+		if err == io.EOF || err == io.ErrUnexpectedEOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		send <- audioBuffer
+	}
+
+	fmt.Println("ffmpeg stopped")
+	return nil
+}

@@ -30,6 +30,8 @@ type repoProvider interface {
 // musicServiceProvider is the interface for the repository.
 type musicServiceProvider interface {
 	PlayMusicLocally(voice *discordgo.VoiceConnection) error
+
+	PlayMusicYoutube(voice *discordgo.VoiceConnection) error
 }
 
 // UseCase is the usecase entity
@@ -64,5 +66,24 @@ func (usecase *Usecase) PlayMusic(message *discordgo.MessageCreate, voice *disco
 	defer voiceConnection.Speaking(false)
 
 	usecase.music.PlayMusicLocally(voiceConnection)
+	return nil
+}
+
+func (usecase *Usecase) PlayMusicYoutube(message *discordgo.MessageCreate, voice *discordgo.VoiceState) error {
+	if voice == nil {
+		usecase.repo.ChannelMessageSend(message.ChannelID, "You need to join the voice channel first !")
+		return nil
+	}
+	usecase.repo.ChannelMessageSend(message.ChannelID, "Playing music from YouTube...")
+	voiceConnection, err := usecase.repo.ChannelVoiceJoin(message.GuildID, voice.ChannelID, false, false)
+	if err != nil {
+		log.Printf("usecase.repo.ChannelVoiceJoin return error (%v) - PlayMusicYoutube", err)
+		return err
+	}
+
+	voiceConnection.Speaking(true)
+	defer voiceConnection.Speaking(false)
+
+	usecase.music.PlayMusicYoutube(voiceConnection)
 	return nil
 }

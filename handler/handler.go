@@ -11,6 +11,7 @@ import (
 // usecaseProvider is the interface for the usecase.
 type usecaseProvider interface {
 	PlayMusic(message *discordgo.MessageCreate, voice *discordgo.VoiceState) error
+	PlayMusicYoutube(message *discordgo.MessageCreate, voice *discordgo.VoiceState) error
 }
 
 // Handler is the handler enti.
@@ -38,17 +39,24 @@ func (h *Handler) IncomingMessageWrapper(discord *discordgo.Session, message *di
 	if message.Author.ID == discord.State.User.ID {
 		return
 	}
-
+	commandContent := strings.Split(message.Content, " ")
+	if len(commandContent) == 0 {
+		return
+	}
 	// respond to user message if it contains `!help` or `!bye`
 	switch {
-	case strings.Contains(message.Content, "!help"):
+	case commandContent[0] == "!help":
 		discord.ChannelMessageSend(message.ChannelID, "Hello World😃")
-	case strings.Contains(message.Content, "!bye"):
+	case commandContent[0] == "!bye":
 		discord.ChannelMessageSend(message.ChannelID, "Good Bye👋")
-	case strings.Contains(message.Content, "!play"):
+	case commandContent[0] == "!play":
 		// get current user voice state
 		voiceState, _ := discord.State.VoiceState(message.GuildID, message.Author.ID)
 		h.usecase.PlayMusic(message, voiceState)
+	case commandContent[0] == "!playt":
+		// get current user voice state
+		voiceState, _ := discord.State.VoiceState(message.GuildID, message.Author.ID)
+		h.usecase.PlayMusicYoutube(message, voiceState)
 	}
 }
 
