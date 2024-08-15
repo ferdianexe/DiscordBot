@@ -81,9 +81,9 @@ func (service *Service) sendPCM(voice *discordgo.VoiceConnection, pcm <-chan []i
 	}
 }
 
-func (service *Service) PlayMusicYoutube(voice *discordgo.VoiceConnection) error {
+func (service *Service) PlayMusicYoutube(voice *discordgo.VoiceConnection, url string) error {
 	var err error
-	cmd := exec.Command("yt-dlp", "-f", "bestaudio", "-o", "-", "youtubelink")
+	cmd := exec.Command("yt-dlp", "-f", "bestaudio", "-o", "-", url)
 	ffmpegCmd := exec.Command("ffmpeg", "-i", "pipe:0", "-f", "s16le", "-ar", "48000", "-ac", "2", "pipe:1")
 	ffmpegCmd.Stdin, err = cmd.StdoutPipe()
 	if err != nil {

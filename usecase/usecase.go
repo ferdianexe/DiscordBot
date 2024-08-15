@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"log"
+	"strings"
 	"sync"
 
 	"github.com/bwmarrin/discordgo"
@@ -31,7 +32,7 @@ type repoProvider interface {
 type musicServiceProvider interface {
 	PlayMusicLocally(voice *discordgo.VoiceConnection) error
 
-	PlayMusicYoutube(voice *discordgo.VoiceConnection) error
+	PlayMusicYoutube(voice *discordgo.VoiceConnection, url string) error
 }
 
 // UseCase is the usecase entity
@@ -81,9 +82,11 @@ func (usecase *Usecase) PlayMusicYoutube(message *discordgo.MessageCreate, voice
 		return err
 	}
 
+	url := strings.Trim(message.Content, "!playt")
+
 	voiceConnection.Speaking(true)
 	defer voiceConnection.Speaking(false)
 
-	usecase.music.PlayMusicYoutube(voiceConnection)
+	usecase.music.PlayMusicYoutube(voiceConnection, url)
 	return nil
 }
