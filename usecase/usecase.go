@@ -1,6 +1,8 @@
 package usecase
 
 import (
+	"ferdianexe/DiscordBot/service/music"
+	"fmt"
 	"log"
 	"strings"
 	"sync"
@@ -32,7 +34,9 @@ type repoProvider interface {
 type musicServiceProvider interface {
 	PlayMusicLocally(voice *discordgo.VoiceConnection) error
 
-	PlayMusicYoutube(voice *discordgo.VoiceConnection, url string) error
+	PlayMusicYoutube(voice *discordgo.VoiceConnection, url string, playlistStatus *music.PlaylistStatus) error
+
+	GetGuildIDPlaylistStatus(guildID string) *music.PlaylistStatus
 }
 
 // UseCase is the usecase entity
@@ -49,6 +53,29 @@ func NewUseCase(dc repoProvider, music musicServiceProvider) *Usecase {
 		lock:  sync.Mutex{},
 		music: music,
 	}
+}
+
+func (usecase *Usecase) AddQueueSong(message *discordgo.MessageCreate, url string) error {
+	guildPlaylist := usecase.music.GetGuildIDPlaylistStatus(message.GuildID)
+
+	if !guildPlaylist.IsPlaying {
+		usecase.repo.ChannelMessageSend(message.ChannelID, "There is no song playing right now, use playt command instead !")
+		return nil
+	}
+	if len(url) == 0 {
+		url = strings.Trim(message.Content, "!queue")
+	}
+
+	guildPlaylist.PlayListMutex.Lock()
+	guildPlaylist.PlaylistURL = append(guildPlaylist.PlaylistURL, url)
+	guildPlaylist.PlayListMutex.Unlock()
+
+	guildPlaylist.PlayListMutex.RLock()
+	totalLength := len(guildPlaylist.PlaylistURL)
+	guildPlaylist.PlayListMutex.RUnlock()
+
+	usecase.repo.ChannelMessageSend(message.ChannelID, fmt.Sprintf("Adding to queue play %s %d song(s) remaining", url, totalLength))
+	return nil
 }
 
 func (usecase *Usecase) PlayMusic(message *discordgo.MessageCreate, voice *discordgo.VoiceState) error {
@@ -75,18 +102,41 @@ func (usecase *Usecase) PlayMusicYoutube(message *discordgo.MessageCreate, voice
 		usecase.repo.ChannelMessageSend(message.ChannelID, "You need to join the voice channel first !")
 		return nil
 	}
-	usecase.repo.ChannelMessageSend(message.ChannelID, "Playing music from YouTube...")
 	voiceConnection, err := usecase.repo.ChannelVoiceJoin(message.GuildID, voice.ChannelID, false, false)
 	if err != nil {
 		log.Printf("usecase.repo.ChannelVoiceJoin return error (%v) - PlayMusicYoutube", err)
 		return err
 	}
 
+	guildPlaylist := usecase.music.GetGuildIDPlaylistStatus(message.GuildID)
+
 	url := strings.Trim(message.Content, "!playt")
+
+	guildPlaylist.PlayMutex.RLock()
+	if guildPlaylist.IsPlaying {
+		guildPlaylist.PlayMutex.RUnlock()
+		usecase.AddQueueSong(message, url)
+		return nil
+	}
+	guildPlaylist.PlayMutex.RUnlock()
 
 	voiceConnection.Speaking(true)
 	defer voiceConnection.Speaking(false)
 
-	usecase.music.PlayMusicYoutube(voiceConnection, url)
+	guildPlaylist.PlaylistURL = append(guildPlaylist.PlaylistURL, url)
+	for {
+		guildPlaylist.PlayListMutex.RLock()
+		if len(guildPlaylist.PlaylistURL) == 0 {
+			guildPlaylist.PlayListMutex.RUnlock()
+			break
+		}
+		playedUrl := guildPlaylist.PlaylistURL[0]
+		guildPlaylist.PlayListMutex.RUnlock()
+		guildPlaylist.PlayListMutex.Lock()
+		guildPlaylist.PlaylistURL = guildPlaylist.PlaylistURL[1:]
+		guildPlaylist.PlayListMutex.Unlock()
+		usecase.repo.ChannelMessageSend(message.ChannelID, fmt.Sprintf("Playing music from YouTube... %s", playedUrl))
+		usecase.music.PlayMusicYoutube(voiceConnection, playedUrl, guildPlaylist)
+	}
 	return nil
 }

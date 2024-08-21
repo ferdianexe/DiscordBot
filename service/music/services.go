@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"os/exec"
+	"sync"
 
 	"github.com/bwmarrin/discordgo"
 	opus "layeh.com/gopus"
@@ -14,11 +15,16 @@ import (
 
 // Service is the Service layer of music
 type Service struct {
+	playMutex   sync.Mutex
+	mapInstance map[string]*PlaylistStatus
 }
 
 // NewService creates a new use case.
 func NewService() *Service {
-	return &Service{}
+	return &Service{
+		playMutex:   sync.Mutex{},
+		mapInstance: make(map[string]*PlaylistStatus),
+	}
 }
 
 func (service *Service) PlayMusicLocally(voice *discordgo.VoiceConnection) error {
@@ -56,6 +62,21 @@ func (service *Service) PlayMusicLocally(voice *discordgo.VoiceConnection) error
 	return nil
 }
 
+func (service *Service) GetGuildIDPlaylistStatus(guildID string) *PlaylistStatus {
+	playListStatus, isExists := service.mapInstance[guildID]
+	if !isExists {
+		playList := PlaylistStatus{
+			PlayMutex:     sync.RWMutex{},
+			PlayListMutex: sync.RWMutex{},
+			IsPlaying:     false,
+			PlaylistURL:   make([]string, 0),
+		}
+		service.mapInstance[guildID] = &playList
+		return &playList
+	}
+	return playListStatus
+}
+
 func (service *Service) sendPCM(voice *discordgo.VoiceConnection, pcm <-chan []int16) {
 	encoder, err := opus.NewEncoder(48000, 2, opus.Audio)
 	if err != nil {
@@ -81,9 +102,20 @@ func (service *Service) sendPCM(voice *discordgo.VoiceConnection, pcm <-chan []i
 	}
 }
 
-func (service *Service) PlayMusicYoutube(voice *discordgo.VoiceConnection, url string) error {
+func (service *Service) PlayMusicYoutube(voice *discordgo.VoiceConnection, url string, playlistStatus *PlaylistStatus) error {
 	var err error
-	cmd := exec.Command("yt-dlp", "-f", "bestaudio", "-o", "-", url)
+
+	playlistStatus.PlayMutex.Lock()
+	playlistStatus.IsPlaying = true
+	playlistStatus.PlayMutex.Unlock()
+
+	defer func() {
+		playlistStatus.PlayMutex.Lock()
+		playlistStatus.IsPlaying = false
+		playlistStatus.PlayMutex.Unlock()
+	}()
+
+	cmd := exec.Command("yt-dlp", "-f", "bestaudio[ext=webm]", "-o", "-", url)
 	ffmpegCmd := exec.Command("ffmpeg", "-i", "pipe:0", "-f", "s16le", "-ar", "48000", "-ac", "2", "pipe:1")
 	ffmpegCmd.Stdin, err = cmd.StdoutPipe()
 	if err != nil {
@@ -129,5 +161,6 @@ func (service *Service) PlayMusicYoutube(voice *discordgo.VoiceConnection, url s
 	}
 
 	fmt.Println("ffmpeg stopped")
+
 	return nil
 }
