@@ -126,7 +126,9 @@ func (usecase *Usecase) PlayMusicYoutube(message *discordgo.MessageCreate, voice
 	guildPlaylist.PlaylistURL = append(guildPlaylist.PlaylistURL, url)
 	for {
 		guildPlaylist.PlayListMutex.RLock()
-		if len(guildPlaylist.PlaylistURL) == 0 {
+		lenURL := len(guildPlaylist.PlaylistURL)
+		fmt.Printf("Play %d song left\n", lenURL)
+		if lenURL == 0 {
 			guildPlaylist.PlayListMutex.RUnlock()
 			break
 		}
@@ -137,6 +139,37 @@ func (usecase *Usecase) PlayMusicYoutube(message *discordgo.MessageCreate, voice
 		guildPlaylist.PlayListMutex.Unlock()
 		usecase.repo.ChannelMessageSend(message.ChannelID, fmt.Sprintf("Playing music from YouTube... %s", playedUrl))
 		usecase.music.PlayMusicYoutube(voiceConnection, playedUrl, guildPlaylist)
+	}
+	return nil
+}
+
+func (usecase *Usecase) SkipMusic(message *discordgo.MessageCreate, voice *discordgo.VoiceState) error {
+	if voice == nil {
+		usecase.repo.ChannelMessageSend(message.ChannelID, "You need to join the voice channel first !")
+		return nil
+	}
+
+	guildPlaylist := usecase.music.GetGuildIDPlaylistStatus(message.GuildID)
+
+	guildPlaylist.PlayMutex.RLock()
+	if !guildPlaylist.IsPlaying {
+		guildPlaylist.PlayMutex.RUnlock()
+		usecase.repo.ChannelMessageSend(message.ChannelID, "There is no song to skip !")
+		return nil
+	}
+	guildPlaylist.PlayMutex.RUnlock()
+
+	guildPlaylist.SkipMutex.Lock()
+	guildPlaylist.IsSkipped = true
+	guildPlaylist.SkipMutex.Unlock()
+	for {
+		guildPlaylist.SkipMutex.RLock()
+		isSkipped := guildPlaylist.IsSkipped
+		guildPlaylist.SkipMutex.RUnlock()
+		if !isSkipped {
+			usecase.repo.ChannelMessageSend(message.ChannelID, "Okay skip this song !")
+			break
+		}
 	}
 	return nil
 }

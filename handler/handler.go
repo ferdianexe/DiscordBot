@@ -13,6 +13,7 @@ type usecaseProvider interface {
 	PlayMusic(message *discordgo.MessageCreate, voice *discordgo.VoiceState) error
 	PlayMusicYoutube(message *discordgo.MessageCreate, voice *discordgo.VoiceState) error
 	AddQueueSong(message *discordgo.MessageCreate, url string) error
+	SkipMusic(message *discordgo.MessageCreate, voice *discordgo.VoiceState) error
 }
 
 // Handler is the handler enti.
@@ -60,6 +61,9 @@ func (h *Handler) IncomingMessageWrapper(discord *discordgo.Session, message *di
 		h.usecase.PlayMusicYoutube(message, voiceState)
 	case commandContent[0] == "!queue":
 		h.usecase.AddQueueSong(message, "")
+	case commandContent[0] == "!skip":
+		voiceState, _ := discord.State.VoiceState(message.GuildID, message.Author.ID)
+		h.usecase.SkipMusic(message, voiceState)
 	}
 }
 

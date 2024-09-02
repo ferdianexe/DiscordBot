@@ -15,14 +15,12 @@ import (
 
 // Service is the Service layer of music
 type Service struct {
-	playMutex   sync.Mutex
 	mapInstance map[string]*PlaylistStatus
 }
 
 // NewService creates a new use case.
 func NewService() *Service {
 	return &Service{
-		playMutex:   sync.Mutex{},
 		mapInstance: make(map[string]*PlaylistStatus),
 	}
 }
@@ -68,7 +66,9 @@ func (service *Service) GetGuildIDPlaylistStatus(guildID string) *PlaylistStatus
 		playList := PlaylistStatus{
 			PlayMutex:     sync.RWMutex{},
 			PlayListMutex: sync.RWMutex{},
+			SkipMutex:     sync.RWMutex{},
 			IsPlaying:     false,
+			IsSkipped:     false,
 			PlaylistURL:   make([]string, 0),
 		}
 		service.mapInstance[guildID] = &playList
@@ -146,6 +146,7 @@ func (service *Service) PlayMusicYoutube(voice *discordgo.VoiceConnection, url s
 	}()
 	fmt.Println("ffmpeg started")
 	send := make(chan []int16, 2)
+	defer close(send) // Close the channel when the function exits
 
 	go service.sendPCM(voice, send)
 	for {
@@ -157,7 +158,20 @@ func (service *Service) PlayMusicYoutube(voice *discordgo.VoiceConnection, url s
 		if err != nil {
 			return err
 		}
+		isSkipped := playlistStatus.IsSkipped
+		if isSkipped {
+			playlistStatus.IsSkipped = false
+			break
+		}
 		send <- audioBuffer
+	}
+
+	// Terminate the external processes if skipping
+	if err := cmd.Process.Kill(); err != nil {
+		fmt.Println("error killing yt-dlp process:", err)
+	}
+	if err := ffmpegCmd.Process.Kill(); err != nil {
+		fmt.Println("error killing ffmpeg process:", err)
 	}
 
 	fmt.Println("ffmpeg stopped")
